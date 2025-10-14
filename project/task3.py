@@ -1,6 +1,7 @@
 """Task 3: Create AdjacencyMatrixFA class with interpeting functions,
 implement automata intersection and RPQ for graphs"""
 
+from enum import Enum
 from typing import Set, Iterable, Tuple, Dict
 from scipy import sparse
 from pyformlang.finite_automaton import (
@@ -12,17 +13,53 @@ from networkx import MultiDiGraph
 from project.task2 import regex_to_dfa, graph_to_nfa
 
 
+class MatrixType(Enum):
+    """Type of sparse matrix from SciPy"""
+
+    BSR = "bsr"
+    COO = "coo"
+    CSC = "csc"
+    CSR = "csr"
+    DIA = "dia"
+    DOK = "dok"
+
+
+def convert_matrix(matrix: sparse.spmatrix, matrix_type: MatrixType):
+    """Converts sparse matrix to a chosen type"""
+    match matrix_type:
+        case MatrixType.BSR:
+            return matrix.tobsr()
+        case MatrixType.COO:
+            return matrix.tocoo()
+        case MatrixType.CSC:
+            return matrix.tocsc()
+        case MatrixType.CSR:
+            return matrix.tocsr()
+        case MatrixType.DIA:
+            return matrix.todia()
+        case MatrixType.DOK:
+            return matrix.todia()
+        case _:
+            return matrix
+
+
 class AdjacencyMatrixFA:
     """Finite automaton represented via sparse adjacency matrix boolean decompositions"""
 
-    boolean_decompositions: Dict[Symbol, sparse.csr_array]
+    boolean_decompositions: Dict[Symbol, sparse.spmatrix]
     start_states: Set[State]
     final_states: Set[State]
     states_len: int
     state_to_idx: Dict[State, int]
+    matrix_type: MatrixType
 
-    def __init__(self, nfa: NondeterministicFiniteAutomaton):
+    def __init__(
+        self,
+        nfa: NondeterministicFiniteAutomaton,
+        matrix_type: MatrixType = MatrixType.CSR,
+    ):
         self.boolean_decompositions = {}
+        self.matrix_type = matrix_type
         if nfa is None:
             self.start_states = set()
             self.final_states = set()
@@ -39,6 +76,7 @@ class AdjacencyMatrixFA:
             self.boolean_decompositions[symbol] = sparse.csr_array(
                 (self.states_len, self.states_len), dtype=bool
             )
+            convert_matrix(self.boolean_decompositions[symbol], matrix_type)
             for state in states:
                 transitions = nfa_dict.get(state)
                 if transitions is None or symbol not in transitions.keys():
@@ -69,11 +107,12 @@ class AdjacencyMatrixFA:
             curr_states = next_states
         return (curr_states & self.final_states) != set()
 
-    def get_transitive_closure(self) -> sparse.csr_array:
+    def get_transitive_closure(self) -> sparse.spmatrix:
         """Returns transitive closure of this adjancency matrix"""
         transitive_closure = sparse.csr_array(
             (self.states_len, self.states_len), dtype=bool
         )
+        convert_matrix(transitive_closure, self.matrix_type)
         transitive_closure.setdiag(True)
         for decomposition in self.boolean_decompositions.values():
             transitive_closure += decomposition

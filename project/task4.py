@@ -1,14 +1,27 @@
 """Task 4: Implement reachability function with regular constraints for multiple start vertices"""
 
+from enum import Enum
 from typing import Set
 from scipy import sparse
 from networkx import MultiDiGraph
 from project.task2 import regex_to_dfa, graph_to_nfa
-from project.task3 import AdjacencyMatrixFA
+from project.task3 import AdjacencyMatrixFA, MatrixType, convert_matrix
+
+
+class StackType(Enum):
+    """Type of sparse stack from SciPy"""
+
+    VSTACK = "vstack"
+    HSTACK = "hstack"
 
 
 def ms_bfs_based_rpq(
-    regex: str, graph: MultiDiGraph, start_nodes: Set[int], final_nodes: Set[int]
+    regex: str,
+    graph: MultiDiGraph,
+    start_nodes: Set[int],
+    final_nodes: Set[int],
+    matrix_type: MatrixType = MatrixType.CSR,
+    stack_type: StackType = StackType.VSTACK,
 ) -> Set[tuple[int, int]]:
     """Reachabilty function, based on multiple source BFS"""
     regex_adj = AdjacencyMatrixFA(regex_to_dfa(regex))
@@ -29,11 +42,14 @@ def ms_bfs_based_rpq(
         front_block = sparse.csr_array(
             (graph_adj.states_len, regex_adj.states_len), dtype=bool
         )
+        convert_matrix(front_block, matrix_type)
         for regex_start_state in regex_adj.start_states:
             regex_start_state_idx = regex_state_to_idx[regex_start_state]
             front_block[graph_start_state_idx, regex_start_state_idx] = True
         front_blocks.append(front_block)
     front = sparse.vstack(front_blocks)
+    if stack_type == "HSTACK":
+        front = sparse.hstack(front_blocks)
     visited = front.copy()
     graph_boolean_decompositons = graph_adj.boolean_decompositions
     regex_boolean_decompositons = regex_adj.boolean_decompositions
@@ -56,6 +72,8 @@ def ms_bfs_based_rpq(
                 )
                 this_symbol_blocks.append(step)
             new_front_blocks[symbol] = sparse.vstack(this_symbol_blocks)
+            if stack_type == "HSTACK":
+                new_front_blocks[symbol] = sparse.hstack(this_symbol_blocks)
         front = sum(new_front_blocks.values()) > visited
         visited = visited + front
     result_pairs = set()
