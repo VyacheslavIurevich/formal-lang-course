@@ -59,7 +59,7 @@ def tensor_based_cfpq(
     graph_alphabet = graph_adj.boolean_decompositions.keys()
     for non_terminal in rsm.boxes.keys():
         if non_terminal not in graph_alphabet:
-            graph_adj.boolean_decompositions[non_terminal] = sparse.csr_array(
+            graph_adj.boolean_decompositions[non_terminal] = sparse.dok_matrix(
                 (graph_adj.states_len, graph_adj.states_len), dtype=bool
             )
     old_nnz = 0
