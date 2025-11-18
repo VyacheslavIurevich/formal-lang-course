@@ -24,23 +24,19 @@ class MatrixType(Enum):
     DOK = "dok"
 
 
+MATRIX_CONVERTERS = {
+    MatrixType.BSR: lambda m: m.tobsr(),
+    MatrixType.COO: lambda m: m.tocoo(),
+    MatrixType.CSC: lambda m: m.tocsc(),
+    MatrixType.CSR: lambda m: m.tocsr(),
+    MatrixType.DIA: lambda m: m.todia(),
+    MatrixType.DOK: lambda m: m.todok(),
+}
+
+
 def convert_matrix(matrix: sparse.spmatrix, matrix_type: MatrixType):
     """Converts sparse matrix to a chosen type"""
-    match matrix_type:
-        case MatrixType.BSR:
-            return matrix.tobsr()
-        case MatrixType.COO:
-            return matrix.tocoo()
-        case MatrixType.CSC:
-            return matrix.tocsc()
-        case MatrixType.CSR:
-            return matrix.tocsr()
-        case MatrixType.DIA:
-            return matrix.todia()
-        case MatrixType.DOK:
-            return matrix.todia()
-        case _:
-            return matrix
+    return MATRIX_CONVERTERS.get(matrix_type, lambda m: m)(matrix)
 
 
 class AdjacencyMatrixFA:
