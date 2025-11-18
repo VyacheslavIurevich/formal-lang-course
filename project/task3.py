@@ -24,19 +24,19 @@ class MatrixType(Enum):
     DOK = "dok"
 
 
-MATRIX_CONVERTERS = {
-    MatrixType.BSR: lambda m: m.tobsr(),
-    MatrixType.COO: lambda m: m.tocoo(),
-    MatrixType.CSC: lambda m: m.tocsc(),
-    MatrixType.CSR: lambda m: m.tocsr(),
-    MatrixType.DIA: lambda m: m.todia(),
-    MatrixType.DOK: lambda m: m.todok(),
+MATRIX_INITIALIZERS = {
+    MatrixType.BSR: lambda size1, size2: sparse.bsr_array((size1, size2), dtype=bool),
+    MatrixType.COO: lambda size1, size2: sparse.coo_array((size1, size2), dtype=bool),
+    MatrixType.CSC: lambda size1, size2: sparse.csc_array((size1, size2), dtype=bool),
+    MatrixType.CSR: lambda size1, size2: sparse.csr_array((size1, size2), dtype=bool),
+    MatrixType.DIA: lambda size1, size2: sparse.dia_array((size1, size2), dtype=bool),
+    MatrixType.DOK: lambda size1, size2: sparse.dok_array((size1, size2), dtype=bool),
 }
 
 
-def convert_matrix(matrix: sparse.spmatrix, matrix_type: MatrixType):
-    """Converts sparse matrix to a chosen type"""
-    return MATRIX_CONVERTERS.get(matrix_type, lambda m: m)(matrix)
+def get_sparse_matrix(size1: int, size2: int, matrix_type: MatrixType):
+    """Initializes sparse matrix of specified type"""
+    return MATRIX_INITIALIZERS[matrix_type](size1, size2)
 
 
 class AdjacencyMatrixFA:
@@ -69,10 +69,9 @@ class AdjacencyMatrixFA:
         self.states_len = len(states)
         nfa_dict = nfa.to_dict()
         for symbol in nfa.symbols:
-            self.boolean_decompositions[symbol] = sparse.csr_array(
-                (self.states_len, self.states_len), dtype=bool
+            self.boolean_decompositions[symbol] = get_sparse_matrix(
+                self.states_len, self.states_len, matrix_type
             )
-            convert_matrix(self.boolean_decompositions[symbol], matrix_type)
             for state in states:
                 transitions = nfa_dict.get(state)
                 if transitions is None or symbol not in transitions.keys():
@@ -105,10 +104,9 @@ class AdjacencyMatrixFA:
 
     def get_transitive_closure(self) -> sparse.spmatrix:
         """Returns transitive closure of this adjancency matrix"""
-        transitive_closure = sparse.csr_array(
-            (self.states_len, self.states_len), dtype=bool
+        transitive_closure = get_sparse_matrix(
+            self.states_len, self.states_len, self.matrix_type
         )
-        convert_matrix(transitive_closure, self.matrix_type)
         transitive_closure.setdiag(True)
         for decomposition in self.boolean_decompositions.values():
             transitive_closure += decomposition
@@ -133,7 +131,8 @@ def intersect_automata(
     automaton1: AdjacencyMatrixFA, automaton2: AdjacencyMatrixFA
 ) -> AdjacencyMatrixFA:
     """Returns automata intersection"""
-    result = AdjacencyMatrixFA(None)
+    assert automaton1.matrix_type == automaton2.matrix_type
+    result = AdjacencyMatrixFA(None, automaton1.matrix_type)
     result.states_len = automaton1.states_len * automaton2.states_len
     first_boolean_decomps = automaton1.boolean_decompositions
     second_boolean_decomps = automaton2.boolean_decompositions
@@ -158,7 +157,9 @@ def intersect_automata(
     )
     result.boolean_decompositions = {
         symbol: sparse.kron(
-            first_boolean_decomps[symbol], second_boolean_decomps[symbol], format="csr"
+            first_boolean_decomps[symbol],
+            second_boolean_decomps[symbol],
+            format=result.matrix_type.value,
         )
         for symbol in result_symbols
     }
@@ -168,17 +169,20 @@ def intersect_automata(
 def tensor_based_rpq(
     regex: str,
     graph: MultiDiGraph,
-    start_nodes: Set[int] = None,
-    final_nodes: Set[int] = None,
+    start_nodes: Set[int] | None = None,
+    final_nodes: Set[int] | None = None,
+    matrix_type: MatrixType = MatrixType.CSR,
 ) -> Set[Tuple[int, int]]:
     """Returns all pairs of nodes, connected by a path,
     that forms a word from the language specified by a regex"""
-    regex_adj = AdjacencyMatrixFA(regex_to_dfa(regex))
+    regex_adj = AdjacencyMatrixFA(regex_to_dfa(regex), matrix_type)
     if start_nodes is None:
         start_nodes = set()
     if final_nodes is None:
         final_nodes = set()
-    graph_adj = AdjacencyMatrixFA(graph_to_nfa(graph, start_nodes, final_nodes))
+    graph_adj = AdjacencyMatrixFA(
+        graph_to_nfa(graph, start_nodes, final_nodes), matrix_type
+    )
     intersection_adj = intersect_automata(regex_adj, graph_adj)
     transitive_closure_adj = intersection_adj.get_transitive_closure()
     pairs = set()
