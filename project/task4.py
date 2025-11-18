@@ -1,29 +1,10 @@
 """Task 4: Implement reachability function with regular constraints for multiple start vertices"""
 
-from enum import Enum
 from typing import Set
 from scipy import sparse
 from networkx import MultiDiGraph
 from project.task2 import regex_to_dfa, graph_to_nfa
 from project.task3 import AdjacencyMatrixFA, MatrixType, get_sparse_matrix
-
-
-class StackType(Enum):
-    """Type of sparse stack from SciPy"""
-
-    VSTACK = "vstack"
-    HSTACK = "hstack"
-
-
-STACK_INITIALIZERS = {
-    StackType.VSTACK: lambda blocks: sparse.vstack(blocks),
-    StackType.HSTACK: lambda blocks: sparse.hstack(blocks),
-}
-
-
-def get_sparse_stack(blocks: list, stack_type: StackType):
-    """Initializes sparse matrix of specified type"""
-    return STACK_INITIALIZERS[stack_type](blocks)
 
 
 def ms_bfs_based_rpq(
@@ -32,7 +13,6 @@ def ms_bfs_based_rpq(
     start_nodes: Set[int],
     final_nodes: Set[int],
     matrix_type: MatrixType = MatrixType.CSR,
-    stack_type: StackType = StackType.VSTACK,
 ) -> Set[tuple[int, int]]:
     """Reachabilty function, based on multiple source BFS"""
     regex_adj = AdjacencyMatrixFA(regex_to_dfa(regex), matrix_type)
@@ -59,7 +39,7 @@ def ms_bfs_based_rpq(
             regex_start_state_idx = regex_state_to_idx[regex_start_state]
             front_block[graph_start_state_idx, regex_start_state_idx] = True
         front_blocks.append(front_block)
-    front = get_sparse_stack(front_blocks, stack_type)
+    front = sparse.vstack(front_blocks)
     visited = front.copy()
     graph_boolean_decompositons = graph_adj.boolean_decompositions
     regex_boolean_decompositons = regex_adj.boolean_decompositions
@@ -81,7 +61,7 @@ def ms_bfs_based_rpq(
                     @ regex_boolean_decompositons[symbol]
                 )
                 this_symbol_blocks.append(step)
-            new_front_blocks[symbol] = get_sparse_stack(this_symbol_blocks, stack_type)
+            new_front_blocks[symbol] = sparse.vstack(this_symbol_blocks)
         front = sum(new_front_blocks.values()) > visited
         visited = visited + front
     result_pairs = set()
